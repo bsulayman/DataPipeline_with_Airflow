@@ -70,6 +70,7 @@ load_user_dimension_table = LoadDimensionOperator(
     dag=dag,
     redshift_conn_id="redshift",
     destination_table="users",
+    append_data=False,
     sql_query=SqlQueries.user_table_insert
 )
 
@@ -78,6 +79,7 @@ load_song_dimension_table = LoadDimensionOperator(
     dag=dag,
     redshift_conn_id="redshift",
     destination_table="songs",
+    append_data=False,
     sql_query=SqlQueries.song_table_insert
 )
 
@@ -86,6 +88,7 @@ load_artist_dimension_table = LoadDimensionOperator(
     dag=dag,
     redshift_conn_id="redshift",
     destination_table="artists",
+    append_data=False,
     sql_query=SqlQueries.artist_table_insert
 )
 
@@ -94,6 +97,7 @@ load_time_dimension_table = LoadDimensionOperator(
     dag=dag,
     redshift_conn_id="redshift",
     destination_table="time",
+    append_data=False,
     sql_query=SqlQueries.time_table_insert
 )
 
@@ -101,7 +105,14 @@ run_quality_checks = DataQualityOperator(
     task_id='Run_data_quality_checks',
     dag=dag,
     redshift_conn_id="redshift",
-    tables=["Staging_events", "Staging_songs", "songplays", "users", "songs", "artists", "time"]
+    tests=[
+              {"table":"staging_events",
+              "sql":"SELECT COUNT(*) FROM staging_events WHERE sessionid is null;",
+              "expected_result":0},
+              {"table":"staging_songs",
+              "sql":"SELECT COUNT(*) FROM staging_songs WHERE song_id is null;",
+              "expected_result":0}
+    ]
 )
 
 end_operator = DummyOperator(task_id='Stop_execution',  dag=dag)
