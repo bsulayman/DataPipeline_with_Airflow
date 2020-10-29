@@ -10,7 +10,7 @@ class DataQualityOperator(BaseOperator):
     @apply_defaults
     def __init__(self,
                  redshift_conn_id="",
-                 tables=[],
+                 tests=[],
                  *args, **kwargs):
 
         """
@@ -18,15 +18,23 @@ class DataQualityOperator(BaseOperator):
 
         Arguments: 
             redshift_conn_id   --  Redshift connection Id
-            tables             --  Tables that its data need to be verified
-            
+            tests              --  An array of tests that will be performed. 
+                                   The format of test should be something like the following:
+                                   [
+                                        {"table":"staging_events",
+                                         "sql":"SELECT COUNT(*) FROM staging_events WHERE sessionid = null",
+                                         "expected_result":0},
+                                        {"table":"staging_songs",
+                                         "sql":"SELECT COUNT(*) FROM staging_songs WHERE song_id = null",
+                                         "expected_result":0}
+                                   ]
         Returns: 
             None
         """
         
         super(DataQualityOperator, self).__init__(*args, **kwargs)
         self.redshift_conn_id = redshift_conn_id
-        self.tables = tables
+        self.tests = tests
         
     def execute(self, context):
         """
@@ -34,17 +42,33 @@ class DataQualityOperator(BaseOperator):
 
         Arguments: 
             redshift_conn_id   --  Redshift connection Id
-            table       s      --  Tables that its data need to be verified
-            
+            tests              --  An array of tests that will be performed. 
+                                   The format of test should be something like the following:
+                                   [
+                                        {"table":"staging_events",
+                                         "sql":"SELECT COUNT(*) FROM staging_events WHERE sessionid = null",
+                                         "expected_result":0},
+                                        {"table":"staging_songs",
+                                         "sql":"SELECT COUNT(*) FROM staging_songs WHERE song_id = null",
+                                         "expected_result":0}
+                                   ]
         Returns: 
             None
         """
         
         redshift_hook = PostgresHook(postgres_conn_id=self.redshift_conn_id)
+        error_count = 0
         
-        self.log.info('Check if table contains data')
-        for table in self.tables:
-            records = redshift_hook.get_records(f"SELECT COUNT(*) FROM {table}")
-            if len(records) < 1 or len(records[0]) < 1 or records[0][0] < 1:
-                raise ValueError(f"Data quality check failed. {table} contained 0 rows")
-            logging.info(f"Data quality on table {table} check passed with {records[0][0]} records")
+        self.log.info('Run data quality check')
+        for test in self.tests:
+            sql = test.get('sql')
+            expected_result = test.get('exepcted_result')
+            result = redshift_hook.get_records(sql)[0]
+            if expected_result != result:
+                error_count += 1
+                self.log.info("This test {} failed. Result is {} and expected result is {}".format(sql, result, expected_result))
+
+        if error_count >= 1:
+            raise ValueError("Data quality checks failed")
+        else:
+            self.log.info("Data quality checks completed successfully")
