@@ -62,9 +62,9 @@ class DataQualityOperator(BaseOperator):
         self.log.info('Run data quality check')
         for test in self.tests:
             sql = test.get('sql')
-            expected_result = test.get('exepcted_result')
-            result = redshift_hook.get_records(sql)[0]
-            if expected_result != result:
+            expected_result = test.get('expected_result')
+            result = redshift_hook.get_records(sql)
+            if expected_result != result[0][0]:
                 error_count += 1
                 self.log.info("This test {} failed. Result is {} and expected result is {}".format(sql, result, expected_result))
 
